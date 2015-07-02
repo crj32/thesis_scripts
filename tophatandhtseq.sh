@@ -44,6 +44,74 @@ if [ "$replicates" == "3" ]; then
 	read id6
 fi
 
+logfile=./log.txt
+
+cp ~/seqsoftware/Trimmomatic/Trimmomatic-0.27/trimmomatic-0.27.jar ./
+
+echo -e "\nenter the phred quality coding, either '64' or '33', (64 for setaria, 33 for chang, usually 33)\n"
+read qual
+echo -e "\nare you trimming adaptors? enter 'y' if yes or 'n' if no\n" 
+read adapt
+mkdir trimmed
+echo -e "\ndo you need a fastqc report of uncleaned reads? if yes 'y' if no 'n'\n"
+read fastq
+
+if [ "$fastqc" == "y" ]; then
+	for UNCLEANFILE in ./*.fq; do
+		echo -e "\nproducing fastqc reports"
+		$HOME/seqsoftware/FastQC/fastqc $UNCLEANFILE
+	done
+	echo -e  "\ndone with fastqc\n"
+fi
+#done
+
+echo -e "\nquality trimming - writing log into file logfile.txt - can collect cleaning % from here\n"
+
+exec > $logfile 2>&1
+
+mkdir theunclean
+
+function trim {
+	for FILE in ./*_1.fq; do
+		java -jar trimmomatic-0.27.jar PE -threads 8 -phred"$qual" $FILE "${FILE/_1.fq/_2.fq}" ./trimmed/"${FILE/_1.fq/_1_paired.fq}" ./trimmed/"${FILE/_1.fq/_1_unpaired.fq}" ./trimmed/"${FILE/_1.fq/_2_paired.fq}" ./trimmed/"${FILE/_1.fq/_2_unpaired.fq}" LEADING:10 TRAILING:10 SLIDINGWINDOW:4:10 MINLEN:60
+		mv ./trimmed/"${FILE/_1.fq/_1_paired.fq}" ./
+		mv ./trimmed/"${FILE/_1.fq/_2_paired.fq}" ./
+		mv FILE ./theunclean
+		mv "${FILE/_1.fq/_2.fq}" ./theunclean
+	done
+}
+
+function trimwithadap {
+	for FILE in ./*_1.fq; do
+		java -jar trimmomatic-0.27.jar PE -threads 8 -phred"$qual" $FILE "${FILE/_1.fq/_2.fq}" ./trimmed/"${FILE/_1.fq/_1_paired.fq}" ./trimmed/"${FILE/_1.fq/_1_unpaired.fq}" ./trimmed/"${FILE/_1.fq/_2_paired.fq}" ./trimmed/"${FILE/_1.fq/_2_unpaired.fq}" ILLUMINACLIP:adaptors.fa:2:30:10 LEADING:10 TRAILING:10 SLIDINGWINDOW:4:10 MINLEN:60
+		mv ./trimmed/"${FILE/_1.fq/_1_paired.fq}" ./
+		mv ./trimmed/"${FILE/_1.fq/_2_paired.fq}" ./
+		mv FILE ./theunclean
+		mv "${FILE/_1.fq/_2.fq}" ./theunclean
+	done
+}
+
+if [ "$adapt" == "y" ]; then
+	trimwithadap
+fi
+
+if [ "$adapt" == "n" ]; then
+	trim
+fi
+
+echo -e "\ndone trimming\n"
+
+#include fastqc report of all cleaned reads
+
+for CLEANFILE in ./*.fq; do
+	echo -e "\nproducing fastqc reports"
+	$HOME/seqsoftware/FastQC/fastqc $CLEANFILE
+done
+
+echo -e "\nwe are done \n"
+
+#done
+
 
 mkdir aligned%
 
